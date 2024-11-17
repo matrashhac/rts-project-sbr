@@ -24,6 +24,8 @@
 #include <string.h>
 #include <stdio.h>
 #include "mpu6050.h"
+#include "motorControl.h"
+#include "myComfyPrint.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -75,7 +77,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-	uint8_t buff[256] = { 0 };
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -104,9 +106,8 @@ int main(void)
   //initialize mpu6050
   mpu6050_init();
 
-  //initialize PWM
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  //initialize motors
+  motor_init();
 
   //initialize PWM of Timer3
   //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
@@ -117,21 +118,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //read values from mpu6050
-	  mpu6050_values_t mpu_values;
-	  mpu6050_read(&mpu_values);
 
-	  int string_length = sprintf((char*) buff, /*sizeof(buff),*/ "Acceleration X = %d\r\nAcceleration Y = %d\r\nAcceleration Z = %d\r\n", mpu_values.acc_x, mpu_values.acc_y, mpu_values.acc_z);
-	  HAL_UART_Transmit(&huart2, buff, strlen((char*) buff), HAL_MAX_DELAY);
+	  char myString[2048];
 
 
-	  static uint16_t asdf = 0;
-	  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, asdf);
-	  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, asdf);
-	  asdf += 100;
-	  if(asdf > 8399) asdf = 0;
+	  //test read values from mpu6050
+	  //mpu6050_values_t mpu_values;
+	  //mpu6050_read(&mpu_values);
+	  //int string_length = sprintf((char*) myString, /*sizeof(buff),*/ "Acceleration X = %d\r\nAcceleration Y = %d\r\nAcceleration Z = %d\r\n", mpu_values.acc_x, mpu_values.acc_y, mpu_values.acc_z);
+	  //HAL_UART_Transmit(&huart2, buff, strlen((char*) buff), HAL_MAX_DELAY);
+	  //myComfyPrint(myString);
 
-	  HAL_Delay(100);
+	  //test motor control
+	  //static uint16_t asdf = 2000;
+	  //motor_control(MOTOR_DIR_FORWARDS, asdf);
+	  //HAL_Delay(1000);
+	  //motor_control(MOTOR_DIR_BACKWARDS, asdf);
+	  //HAL_Delay(1000);
+	  //asdf = (asdf + 100) % MOTOR_MAX_SPEED;
+	  //HAL_Delay(100);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -324,7 +330,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|PIN_MOTOR2_DIR_Pin|PIN_MOTOR__DIR_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|MOTOR2_DIR_Pin|MOTOR3_DIR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -332,8 +338,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD2_Pin PIN_MOTOR2_DIR_Pin PIN_MOTOR__DIR_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin|PIN_MOTOR2_DIR_Pin|PIN_MOTOR__DIR_Pin;
+  /*Configure GPIO pins : LD2_Pin MOTOR2_DIR_Pin MOTOR3_DIR_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin|MOTOR2_DIR_Pin|MOTOR3_DIR_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

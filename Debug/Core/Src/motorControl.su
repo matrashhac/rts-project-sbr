@@ -1,0 +1,2 @@
+../Core/Src/motorControl.c:14:6:motor_init	8	static
+../Core/Src/motorControl.c:20:6:motor_control	16	static
