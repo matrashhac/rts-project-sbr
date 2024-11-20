@@ -11,7 +11,7 @@
 #include "main.h"
 #include <stdint.h>
 
-#define MOTOR_MAX_SPEED 8399
+#define MOTOR_MAX_SPEED 8399	//is just the values i have currently set up on my microcontroller
 
 #define MOTOR_DIR_FORWARDS 0
 #define MOTOR_DIR_BACKWARDS 1

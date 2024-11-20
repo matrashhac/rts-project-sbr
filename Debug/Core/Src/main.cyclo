@@ -1,8 +1,8 @@
 ../Core/Inc/myComfyPrint.h:19:6:myComfyPrint	1
-../Core/Src/main.c:76:5:main	1
-../Core/Src/main.c:156:6:SystemClock_Config	3
-../Core/Src/main.c:204:13:MX_I2C1_Init	2
-../Core/Src/main.c:238:13:MX_TIM3_Init	5
-../Core/Src/main.c:291:13:MX_USART2_UART_Init	2
-../Core/Src/main.c:324:13:MX_GPIO_Init	1
-../Core/Src/main.c:364:6:Error_Handler	1
+../Core/Src/main.c:78:5:main	12
+../Core/Src/main.c:297:6:SystemClock_Config	3
+../Core/Src/main.c:345:13:MX_I2C1_Init	2
+../Core/Src/main.c:379:13:MX_TIM3_Init	5
+../Core/Src/main.c:432:13:MX_USART2_UART_Init	2
+../Core/Src/main.c:465:13:MX_GPIO_Init	1
+../Core/Src/main.c:505:6:Error_Handler	1
