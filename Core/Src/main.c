@@ -54,6 +54,10 @@ UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 
+mpu6050_values_t mpu_values = { 0 };
+
+int32_t motor_value = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -68,7 +72,9 @@ static void MX_TIM3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void task_calculate_motor_values(void* parameter);
+void task_read_mpu6050(void* parameter);
+void task_motor_control(void* parameter);
 /* USER CODE END 0 */
 
 /**
@@ -111,8 +117,38 @@ int main(void)
   //initialize motors
   motor_init();
 
-  //initialize PWM of Timer3
-  //HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+
+
+  //while loop to wait until robot is in upright position
+  //calculate angle from acceleration values
+  float acc_angle_temp=1;
+  static uint8_t done_already = 0;
+  char myString[256] = { 0 };
+
+  mpu6050_read(&mpu_values);
+
+  if(done_already == 0){
+	  while(acc_angle_temp != 0){
+		  acc_angle_temp = atan2(mpu_values.acc_x, mpu_values.acc_z)*RAD_TO_DEG;	//*(180/M_PI) to convert from radian to degree
+		  if(isnan(acc_angle_temp)){
+			  sprintf((char*) myString, "acc_angle_temp is NaN\r\n");
+			  myComfyPrint(myString);
+		  }
+		  else{
+			  sprintf((char*) myString, "acc_angle_temp*100 = %d\r\n", (int) (acc_angle_temp*100));	//apparently floating numbers are disabled in print funcitons by defautl if using newlib
+			  myComfyPrint(myString);
+		  }
+
+		  mpu6050_read(&mpu_values);
+	  }
+	  done_already = 1;
+	  mpu6050_read(&mpu_values);
+  }
+  sprintf((char*) myString, "Acceleration X = %d\r\nAcceleration Y = %d\r\nAcceleration Z = %d\r\n", mpu_values.acc_x, mpu_values.acc_y, mpu_values.acc_z);
+  myComfyPrint(myString);
+  sprintf((char*) myString, "Gyroscope X = %d\r\nGyroscope Y = %d\r\nGyroscope Z = %d\r\n", mpu_values.gyro_x, mpu_values.gyro_y, mpu_values.gyro_z);
+  myComfyPrint(myString);
+
 
   /* USER CODE END 2 */
 
@@ -123,8 +159,10 @@ int main(void)
 
 	  char myString[2048];
 
+	  //////////////////////////////////
+	  //read values from mpu6050 BEGIN//
+	  //////////////////////////////////
 
-	  //test read values from mpu6050
 	  mpu6050_values_t mpu_values;
 	  mpu6050_read(&mpu_values);
 	  sprintf((char*) myString, /*sizeof(buff),*/ "Acceleration X = %d\r\nAcceleration Y = %d\r\nAcceleration Z = %d\r\n", mpu_values.acc_x, mpu_values.acc_y, mpu_values.acc_z);
@@ -132,7 +170,19 @@ int main(void)
 	  sprintf((char*) myString, /*sizeof(buff),*/ "Gyroscope X = %d\r\nGyroscope Y = %d\r\nGyroscope Z = %d\r\n", mpu_values.gyro_x, mpu_values.gyro_y, mpu_values.gyro_z);
 	  myComfyPrint(myString);
 
-	  //debug
+	  ////////////////////////////////
+	  //read values from mpu6050 END//
+	  ////////////////////////////////
+
+
+
+
+
+
+	  ////////////////////////////
+	  //some debug stuff 1 BEGIN//
+	  ////////////////////////////
+
 	  static int16_t counter = 0;
 	  static int16_t myArr[25] = { 0 };
 	  myArr[counter] = mpu_values.gyro_y;
@@ -153,58 +203,24 @@ int main(void)
 	  sprintf((char*) myString, "max diff = %d\r\n", max_acc_x - min_acc_x);
 	  myComfyPrint(myString);
 
-
-	  //test motor control
-	  //static uint16_t asdf = 2000;
-	  //motor_control(MOTOR_DIR_FORWARDS, asdf);
-	  //HAL_Delay(1000);
-	  //motor_control(MOTOR_DIR_BACKWARDS, asdf);
-	  //HAL_Delay(1000);
-	  //asdf = (asdf + 100) % MOTOR_MAX_SPEED;
-
-	  //mixing acc-values and motor
-	  //threshold for the motor to move, seems to be the value "500"
-	  /*int16_t motorValue = 2 * mpu_values.acc_x;
-	  if(mpu_values.acc_x < 0){
-		  motor_control(MOTOR_DIR_BACKWARDS, abs(motorValue));
-	  }
-	  else{
-		  motor_control(MOTOR_DIR_FORWARDS, motorValue);
-	  }*/
+	  ////////////////////////
+	  //some debug stuff END//
+	  ////////////////////////
 
 
 
-	  //angle stuff for pid
-	  //while loop to wait until robot is in upright position
-	  //calculate angle from acceleration values
-	  	  float acc_angle_temp=1;
-	  	  static uint8_t done_already = 0;
 
-	  	  if(done_already == 0){
-			  while(acc_angle_temp != 0){
-				  acc_angle_temp = atan2(mpu_values.acc_x, mpu_values.acc_z)*RAD_TO_DEG;	//*(180/M_PI) to convert from radian to degree
-				  if(isnan(acc_angle_temp)){
-					  sprintf((char*) myString, "acc_angle_temp is NaN\r\n");
-					  myComfyPrint(myString);
-				  }
-				  else{
-					  sprintf((char*) myString, "acc_angle_temp*100 = %d\r\n", (int) (acc_angle_temp*100));	//apparently floating numbers are disabled in print funcitons by defautl if using newlib
-					  myComfyPrint(myString);
-				  }
 
-				  mpu6050_read(&mpu_values);
-			  }
-	  	  	  done_already = 1;
-	  	  	  mpu6050_read(&mpu_values);
-  	  	  }
-	  	  sprintf((char*) myString, /*sizeof(buff),*/ "Acceleration X = %d\r\nAcceleration Y = %d\r\nAcceleration Z = %d\r\n", mpu_values.acc_x, mpu_values.acc_y, mpu_values.acc_z);
-	  	  myComfyPrint(myString);
-	  	  sprintf((char*) myString, /*sizeof(buff),*/ "Gyroscope X = %d\r\nGyroscope Y = %d\r\nGyroscope Z = %d\r\n", mpu_values.gyro_x, mpu_values.gyro_y, mpu_values.gyro_z);
-	  	  myComfyPrint(myString);
+
+	  ////////////////////////////////
+	  //calculate motor values BEGIN//
+	  ////////////////////////////////
 
 	  //calculate angle from acceleration values
 	  float acc_angle;
 	  acc_angle = atan2(mpu_values.acc_x, mpu_values.acc_z)*RAD_TO_DEG;	//*(180/M_PI) to convert from radian to degree
+
+	  //debug prints
 	  if(isnan(acc_angle)){
 		  sprintf((char*) myString, "acc_angle is NaN\r\n");
 		  myComfyPrint(myString);
@@ -213,27 +229,30 @@ int main(void)
 		  sprintf((char*) myString, "acc_angle*100 = %d\r\n", (int) (acc_angle*100));	//apparently floating numbers are disabled in print funcitons by defautl if using newlib
 		  myComfyPrint(myString);
 	  }
+	  //debug prints
 
-	  //debug
-	  	  static int16_t counter2 = 0;
-	  	  static int16_t myArr2[100] = { 0 };
-	  	  myArr2[counter2] = acc_angle;
-	  	  counter2 = (counter2+1) % 100;
-	  	  int32_t sum2 = 0;
-	  	  for(int i = 0; i<100; i++){
-	  		  sum2 += myArr2[i];
-	  	  }
-	  	  sprintf((char*) myString, "average acc_angle*100000 = %d\r\n", (sum2*100000)/100);
+
+	  //debug prints
+	  static int16_t counter2 = 0;
+	  static int16_t myArr2[100] = { 0 };
+	  myArr2[counter2] = acc_angle;
+	  counter2 = (counter2+1) % 100;
+	  int32_t sum2 = 0;
+	  for(int i = 0; i<100; i++){
+		  sum2 += myArr2[i];
+	  }
+	  sprintf((char*) myString, "average acc_angle*100000 = %d\r\n", (sum2*100000)/100);
 	  myComfyPrint(myString);
+	  //debug prints
 
 
-
+	  ////////////////////////////////
 	  //calculate angle from gyroscope
 	  float gyro_rate = mpu_values.gyro_y * (1000.0/INT16_MAX);	//500, because that is the range that the mpu6050 is set to currently
 	  static float gyro_angle;
 	  static uint32_t current_time=0;
 	  static uint32_t last_time;
-	  if(done_already == 1){
+	  if(done_already == 1){	//this awkward if-else is just temporary, so the last_time  and current_time are not too far apart from eachother, as this would lead to very high motor values there
 		  last_time = HAL_GetTick();
 		  done_already = 2;
 	  }
@@ -246,16 +265,25 @@ int main(void)
 	  sprintf((char*) myString, "gyro_angle*100 = %d\r\n", (int) (gyro_angle*100));	//apparently floating numbers are disabled in print funcitons by defautl if using newlib
 	  myComfyPrint(myString);
 
+	  //////////////////////////////
 	  //combine both values into one
 	  static float current_angle=0;
 	  static float last_angle=0;
 	  float alpha = 0.9934;
 	  last_angle = current_angle;
 	  current_angle = alpha * (gyro_angle) + (float) (1-alpha) * acc_angle;
+
+	  if(done_already == 2){	//awkward if, so last_angle is not extremely different from current_angle on the first iteration as this would possibly lead to very high motor values there
+		last_angle = current_angle;
+		done_already = 3;
+	  }
+
+	  //debug print
 	  sprintf((char*) myString, "combined_angle*100 = %d\r\n", (int) current_angle);
 	  myComfyPrint(myString);
+	  //debug print
 
-
+	  /////
 	  //PID
 	  float target_angle = 0;
 	  float deviation = current_angle - target_angle;
@@ -263,9 +291,21 @@ int main(void)
 	  deviation_sum = deviation_sum + deviation;
 	  //add constraining of max value of deviation_sum here
 
-	  float Kp=11.8, Ki=0, Kd=0.15;
-	  float motor_value_in_percent = Kp*deviation + Ki*deviation_sum*((float)(current_time-last_time)/1000) + Kd*(current_angle)/((float)(current_time-last_time)/1000);
+	  float Kp=12, Ki=0, Kd=0;
+	  float motor_value_in_percent = Kp*deviation + Ki*deviation_sum*((float)(current_time-last_time)/1000) - Kd*(current_angle-last_angle)/((float)(current_time-last_time)/1000);
 	  int32_t motor_value = (motor_value_in_percent * MOTOR_MAX_SPEED) /100;
+
+	  //////////////////////////////
+	  //calculate motor values END//
+	  //////////////////////////////
+
+
+
+
+
+	  ///////////////////////
+	  //control motor BEGIN//
+	  ///////////////////////
 
 	  if(motor_value >= 0){
 		  motor_control(MOTOR_DIR_FORWARDS, (uint16_t) abs(motor_value));
@@ -277,11 +317,10 @@ int main(void)
 	  sprintf((char*) myString, "calculated motorValue = %d\r\n", motor_value);
 	  myComfyPrint(myString);
 
+	  /////////////////////
+	  //control motor END//
+	  /////////////////////
 
-
-
-
-	  //HAL_Delay(50);
 
     /* USER CODE END WHILE */
 
@@ -497,6 +536,27 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
