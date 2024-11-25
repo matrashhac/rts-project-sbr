@@ -52,6 +52,10 @@ void mpu6050_init(){
 	  uint8_t lpf_setting = LPF_44;
 	  HAL_I2C_Mem_Write(&hi2c1, (DEVICE_ADDRESS<<1) +0, REG_LOW_PASS_FILTER, 1, &lpf_setting, sizeof(lpf_setting), 100);
 
+	  //enable interrupt to signal that data is ready to be read
+	  uint8_t interrupt_signal = INT_DATA_READY;
+	  HAL_I2C_Mem_Write(&hi2c1, (DEVICE_ADDRESS<<1) +0, REG_INTERRUPT, 1, &interrupt_signal, sizeof(interrupt_signal), 100);
+
 	  //deactivate sleep
 	  uint8_t asdf_flags = 0b00001000;	//set the '1' also to '0' if you want the temperature sensor to be enabled
 	  if(HAL_I2C_Mem_Write(&hi2c1, (DEVICE_ADDRESS<<1) +0, REG_USR_CTRL, 1, &asdf_flags, sizeof(asdf_flags), 100) == HAL_OK){

@@ -30,12 +30,16 @@
 #define LPF_10 5
 #define LPF_5 6
 
+#define INT_DATA_READY 1
+
 #define REG_CONFIG_GYRO 27
 #define REG_CONFIG_ACC 28
 #define REG_USR_CTRL 107
 #define REG_ACC_DATA 59
 #define REG_GYRO_DATA 67
 #define REG_LOW_PASS_FILTER 26
+
+#define REG_INTERRUPT 56
 
 #define GYRO_Y_OFFSET_500 22
 #define GYRO_Y_OFFSET_1000 12
