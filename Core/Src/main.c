@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -52,6 +53,37 @@ TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
+/* Definitions for Task_ReadMPU605 */
+osThreadId_t Task_ReadMPU605Handle;
+const osThreadAttr_t Task_ReadMPU605_attributes = {
+  .name = "Task_ReadMPU605",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Task_CalcValues */
+osThreadId_t Task_CalcValuesHandle;
+const osThreadAttr_t Task_CalcValues_attributes = {
+  .name = "Task_CalcValues",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Task_CtrlMotor */
+osThreadId_t Task_CtrlMotorHandle;
+const osThreadAttr_t Task_CtrlMotor_attributes = {
+  .name = "Task_CtrlMotor",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for mpu_values_mutex */
+osMutexId_t mpu_values_mutexHandle;
+const osMutexAttr_t mpu_values_mutex_attributes = {
+  .name = "mpu_values_mutex"
+};
+/* Definitions for motor_value_mutex */
+osMutexId_t motor_value_mutexHandle;
+const osMutexAttr_t motor_value_mutex_attributes = {
+  .name = "motor_value_mutex"
+};
 /* USER CODE BEGIN PV */
 
 mpu6050_values_t mpu_values = { 0 };
@@ -66,6 +98,10 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM3_Init(void);
+void task_read_mpu6050(void *argument);
+void task_calculate_motor_values(void *argument);
+void task_control_motors(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -151,6 +187,54 @@ int main(void)
 
 
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();
+  /* Create the mutex(es) */
+  /* creation of mpu_values_mutex */
+  mpu_values_mutexHandle = osMutexNew(&mpu_values_mutex_attributes);
+
+  /* creation of motor_value_mutex */
+  motor_value_mutexHandle = osMutexNew(&motor_value_mutex_attributes);
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of Task_ReadMPU605 */
+  Task_ReadMPU605Handle = osThreadNew(task_read_mpu6050, NULL, &Task_ReadMPU605_attributes);
+
+  /* creation of Task_CalcValues */
+  Task_CalcValuesHandle = osThreadNew(task_calculate_motor_values, NULL, &Task_CalcValues_attributes);
+
+  /* creation of Task_CtrlMotor */
+  Task_CtrlMotorHandle = osThreadNew(task_control_motors, NULL, &Task_CtrlMotor_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -536,7 +620,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(MPU6050_INT_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -551,6 +635,154 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
   }
 }
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_task_read_mpu6050 */
+
+/* USER CODE END Header_task_read_mpu6050 */
+void task_read_mpu6050(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+
+	uint8_t read_mpu_buff[6] = { 0 };
+	mpu6050_values_t mpu_values_temp;
+
+	for(;;)
+	{
+
+		//read accelerometer data
+		HAL_I2C_Mem_Read(&hi2c1, (DEVICE_ADDRESS<<1) +1, REG_ACC_DATA, 1, read_mpu_buff, sizeof(read_mpu_buff), 100);
+		mpu_values_temp.acc_x = (uint16_t) (read_mpu_buff[0]<<8) + read_mpu_buff[1];
+		mpu_values_temp.acc_y = (uint16_t) (read_mpu_buff[2]<<8) + read_mpu_buff[3];
+		mpu_values_temp.acc_z = (uint16_t) (read_mpu_buff[4]<<8) + read_mpu_buff[5];
+
+		//read gyroscope data
+		HAL_I2C_Mem_Read(&hi2c1, (DEVICE_ADDRESS<<1) +1, REG_GYRO_DATA, 1, read_mpu_buff, sizeof(read_mpu_buff), 100);
+		mpu_values_temp.gyro_x = (uint16_t) (read_mpu_buff[0]<<8) + read_mpu_buff[1];
+		mpu_values_temp.gyro_y = (uint16_t) (read_mpu_buff[2]<<8) + read_mpu_buff[3];
+		mpu_values_temp.gyro_z = (uint16_t) (read_mpu_buff[4]<<8) + read_mpu_buff[5];
+
+		//apply offsets
+		mpu_values_temp.gyro_y += GYRO_Y_OFFSET_1000;
+
+		//copy values to global variable
+		osMutexAcquire(mpu_values_mutexHandle, osWaitForever);
+		mpu_values.acc_x = mpu_values_temp.acc_x;
+		mpu_values.acc_y = mpu_values_temp.acc_y;
+		mpu_values.acc_z = mpu_values_temp.acc_z;
+		mpu_values.gyro_x = mpu_values_temp.gyro_x;
+		mpu_values.gyro_y = mpu_values_temp.gyro_y;
+		mpu_values.gyro_z = mpu_values_temp.gyro_z;
+		osMutexRelease(mpu_values_mutexHandle);
+
+	  }
+
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_task_calculate_motor_values */
+/**
+* @brief Function implementing the Task_CalcValues thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_task_calculate_motor_values */
+void task_calculate_motor_values(void *argument)
+{
+  /* USER CODE BEGIN task_calculate_motor_values */
+
+	  float acc_angle;
+	  float gyro_rate, gyro_angle;
+	  uint32_t current_time=(osKernelGetTickCount() / (1000.0/osKernelGetTickFreq())), last_time = current_time;
+	  float current_angle=0, last_angle=0;
+	  float alpha = 0.9934;
+	  float target_angle=0;
+	  float deviation, deviation_sum=0;
+	  float Kp=12, Ki=0, Kd=0;
+	  float motor_value_in_percent;
+	  int32_t motor_value;
+
+
+
+  /* Infinite loop */
+  for(;;)
+  {
+
+	  //calculate angle from acceleration values
+	  acc_angle = atan2(mpu_values.acc_x, mpu_values.acc_z)*RAD_TO_DEG;	//*(180/M_PI) to convert from radian to degree
+
+	  //calculate angle from gyroscope
+	  gyro_rate = mpu_values.gyro_y * (1000.0/INT16_MAX);	//500, because that is the range that the mpu6050 is set to currently
+	  current_time = (osKernelGetTickCount() / (1000.0/osKernelGetTickFreq()));
+	  gyro_angle = gyro_angle + gyro_rate*((float)(current_time-last_time)/1000.0);
+
+	  //combine both values into one
+	  last_angle = current_angle;
+	  current_angle = alpha * (gyro_angle) + (float) (1-alpha) * acc_angle;
+
+	  //PID
+	  deviation_sum = deviation_sum + deviation;
+	  //add constraining of max value of deviation_sum here
+
+	  motor_value_in_percent = Kp*deviation + Ki*deviation_sum*((float)(current_time-last_time)/1000) - Kd*(current_angle-last_angle)/((float)(current_time-last_time)/1000);
+	  motor_value = (motor_value_in_percent * MOTOR_MAX_SPEED) /100;
+
+  }
+  /* USER CODE END task_calculate_motor_values */
+}
+
+/* USER CODE BEGIN Header_task_control_motors */
+/**
+* @brief Function implementing the Task_CtrlMotor thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_task_control_motors */
+void task_control_motors(void *argument)
+{
+  /* USER CODE BEGIN task_control_motors */
+
+	int32_t motor_value_copy;
+
+  /* Infinite loop */
+  for(;;)
+  {
+
+	  //copy motor value
+	  osMutexAcquire(motor_value_mutexHandle, osWaitForever);
+	  motor_value_copy = motor_value;
+	  osMutexRelease(motor_value_mutexHandle);
+
+	  if(motor_value >= 0){
+		  motor_control(MOTOR_DIR_FORWARDS, (uint16_t) abs(motor_value));
+	  }
+	  else if(motor_value < 0){
+		  motor_control(MOTOR_DIR_BACKWARDS, (uint16_t) abs(motor_value));
+	  }
+
+  }
+  /* USER CODE END task_control_motors */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
