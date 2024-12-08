@@ -536,6 +536,12 @@ void task_calculate_motor_values(void *argument)
 	  mpu6050_values_t mpu6050_temp_values;
 	  mpu6050_values_t mpu_values;
 
+	  //makeshift ringbuffer
+	  mpu6050_values_t mpu_arr[8] = { 0 };
+	  const uint8_t mpu_arr_size = sizeof(mpu_arr)/sizeof(mpu6050_values_t);
+	  uint8_t mpu_arr_counter = 0;
+
+
 
 
   /* Infinite loop */
@@ -547,8 +553,32 @@ void task_calculate_motor_values(void *argument)
 		  //busy waiting
 	  }
 
-	  //read values from queue
-	  osMessageQueueGet(mpu6050_values_queueHandle, &mpu_values, NULL, osWaitForever);
+	  //read values from queue into makeshift ringbuffer
+	  for(int i=0; i<osMessageQueueGetCount(mpu6050_values_queueHandle); i++){
+		  osMessageQueueGet(mpu6050_values_queueHandle, &mpu_arr[mpu_arr_counter], NULL, osWaitForever);
+		  mpu_arr_counter = (mpu_arr_counter+1) % mpu_arr_size;
+	  }
+
+	  //calculate average mpu value
+	  int32_t acc_x=0, acc_y=0, acc_z=0, gyro_x=0, gyro_y=0, gyro_z=0;	//temporary storage, because saving it directly in mpu_values.xy coudld make it overflow, bc it is int16_t
+	  for(int i=0; i<mpu_arr_size; i++){
+		  acc_x += (int32_t) mpu_arr[i].acc_x;
+		  acc_y += (int32_t) mpu_arr[i].acc_y;
+		  acc_z += (int32_t) mpu_arr[i].acc_z;
+		  gyro_x += (int32_t) mpu_arr[i].gyro_x;
+		  gyro_y += (int32_t) mpu_arr[i].gyro_y;
+		  gyro_z += (int32_t) mpu_arr[i].gyro_z;
+	  }
+	  mpu_values.acc_x = (int16_t) (acc_x / mpu_arr_size);
+	  mpu_values.acc_y = (int16_t) (acc_y / mpu_arr_size);
+	  mpu_values.acc_z = (int16_t) (acc_z / mpu_arr_size);
+	  mpu_values.gyro_x = (int16_t) (gyro_x / mpu_arr_size);
+	  mpu_values.gyro_y = (int16_t) (gyro_y / mpu_arr_size);
+	  mpu_values.gyro_z = (int16_t) (gyro_z / mpu_arr_size);
+
+	  {char temp_string[32] = {0};
+	  sprintf(temp_string, "mpu_values.acc_x = %d\r\n", mpu_values.acc_x);
+	  myComfyPrint(temp_string);}
 
 
 	  //calculate angle from acceleration values

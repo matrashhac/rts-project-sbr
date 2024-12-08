@@ -8,9 +8,9 @@
 ../Core/Src/main.c:341:13:MX_TIM3_Init	5
 ../Core/Src/main.c:394:13:MX_USART2_UART_Init	2
 ../Core/Src/main.c:427:13:MX_GPIO_Init	1
-../Core/Src/main.c:470:6:HAL_GPIO_EXTI_Callback	1
-../Core/Src/main.c:481:6:task_read_mpu6050	2
-../Core/Src/main.c:526:6:task_calculate_motor_values	3
-../Core/Src/main.c:606:6:task_control_motors	4
-../Core/Src/main.c:643:6:HAL_TIM_PeriodElapsedCallback	2
-../Core/Src/main.c:660:6:Error_Handler	1
+../Core/Src/main.c:466:6:HAL_GPIO_EXTI_Callback	1
+../Core/Src/main.c:477:6:task_read_mpu6050	2
+../Core/Src/main.c:522:6:task_calculate_motor_values	5
+../Core/Src/main.c:626:6:task_control_motors	4
+../Core/Src/main.c:663:6:HAL_TIM_PeriodElapsedCallback	2
+../Core/Src/main.c:680:6:Error_Handler	1
