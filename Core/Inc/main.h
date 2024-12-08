@@ -77,7 +77,6 @@ void Error_Handler(void);
 #define SWO_GPIO_Port GPIOB
 #define MPU6050_INT_Pin GPIO_PIN_5
 #define MPU6050_INT_GPIO_Port GPIOB
-#define MPU6050_INT_EXTI_IRQn EXTI9_5_IRQn
 
 /* USER CODE BEGIN Private defines */
 

@@ -29,6 +29,7 @@
 #include "mpu6050.h"
 #include "motorControl.h"
 #include "myComfyPrint.h"
+#include "ringbuffer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -74,21 +75,17 @@ const osThreadAttr_t Task_CtrlMotor_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
-/* Definitions for mpu_values_mutex */
-osMutexId_t mpu_values_mutexHandle;
-const osMutexAttr_t mpu_values_mutex_attributes = {
-  .name = "mpu_values_mutex"
+/* Definitions for mpu6050_values_queue */
+osMessageQueueId_t mpu6050_values_queueHandle;
+const osMessageQueueAttr_t mpu6050_values_queue_attributes = {
+  .name = "mpu6050_values_queue"
 };
-/* Definitions for motor_value_mutex */
-osMutexId_t motor_value_mutexHandle;
-const osMutexAttr_t motor_value_mutex_attributes = {
-  .name = "motor_value_mutex"
+/* Definitions for motor_value_queue */
+osMessageQueueId_t motor_value_queueHandle;
+const osMessageQueueAttr_t motor_value_queue_attributes = {
+  .name = "motor_value_queue"
 };
 /* USER CODE BEGIN PV */
-
-mpu6050_values_t mpu_values = { 0 };
-
-int32_t motor_value = 0;
 
 /* USER CODE END PV */
 
@@ -148,7 +145,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   //initialize mpu6050
-  mpu6050_init();
+  HAL_Delay(1000);
+  while(mpu6050_init() != 0){
+	  HAL_Delay(1000);
+	  //try until it worked
+  }
 
   //initialize motors
   motor_init();
@@ -160,6 +161,7 @@ int main(void)
   float acc_angle_temp=1;
   static uint8_t done_already = 0;
   char myString[256] = { 0 };
+  mpu6050_values_t mpu_values;
 
   mpu6050_read(&mpu_values);
 
@@ -190,12 +192,6 @@ int main(void)
 
   /* Init scheduler */
   osKernelInitialize();
-  /* Create the mutex(es) */
-  /* creation of mpu_values_mutex */
-  mpu_values_mutexHandle = osMutexNew(&mpu_values_mutex_attributes);
-
-  /* creation of motor_value_mutex */
-  motor_value_mutexHandle = osMutexNew(&motor_value_mutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
   /* add mutexes, ... */
@@ -208,6 +204,13 @@ int main(void)
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of mpu6050_values_queue */
+  mpu6050_values_queueHandle = osMessageQueueNew (8, sizeof(mpu6050_values_t), &mpu6050_values_queue_attributes);
+
+  /* creation of motor_value_queue */
+  motor_value_queueHandle = osMessageQueueNew (1, sizeof(int32_t), &motor_value_queue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -240,170 +243,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
-	  char myString[2048];
-
-	  //////////////////////////////////
-	  //read values from mpu6050 BEGIN//
-	  //////////////////////////////////
-
-	  mpu6050_values_t mpu_values;
-	  mpu6050_read(&mpu_values);
-	  sprintf((char*) myString, /*sizeof(buff),*/ "Acceleration X = %d\r\nAcceleration Y = %d\r\nAcceleration Z = %d\r\n", mpu_values.acc_x, mpu_values.acc_y, mpu_values.acc_z);
-	  myComfyPrint(myString);
-	  sprintf((char*) myString, /*sizeof(buff),*/ "Gyroscope X = %d\r\nGyroscope Y = %d\r\nGyroscope Z = %d\r\n", mpu_values.gyro_x, mpu_values.gyro_y, mpu_values.gyro_z);
-	  myComfyPrint(myString);
-
-	  ////////////////////////////////
-	  //read values from mpu6050 END//
-	  ////////////////////////////////
-
-
-
-
-
-
-	  ////////////////////////////
-	  //some debug stuff 1 BEGIN//
-	  ////////////////////////////
-
-	  static int16_t counter = 0;
-	  static int16_t myArr[25] = { 0 };
-	  myArr[counter] = mpu_values.gyro_y;
-	  counter = (counter+1) % 25;
-	  int32_t sum = 0;
-	  for(int i = 0; i<25; i++){
-		  sum += myArr[i];
-	  }
-	  sprintf((char*) myString, "average gyro_y = %d\r\n", sum/25);
-	  myComfyPrint(myString);
-
-
-
-	  static int16_t max_acc_x = INT16_MIN;
-	  static int16_t min_acc_x = INT16_MAX;
-	  if(mpu_values.acc_x > max_acc_x) max_acc_x = mpu_values.acc_x;
-	  if(mpu_values.acc_x < min_acc_x) min_acc_x = mpu_values.acc_x;
-	  sprintf((char*) myString, "max diff = %d\r\n", max_acc_x - min_acc_x);
-	  myComfyPrint(myString);
-
-	  ////////////////////////
-	  //some debug stuff END//
-	  ////////////////////////
-
-
-
-
-
-
-	  ////////////////////////////////
-	  //calculate motor values BEGIN//
-	  ////////////////////////////////
-
-	  //calculate angle from acceleration values
-	  float acc_angle;
-	  acc_angle = atan2(mpu_values.acc_x, mpu_values.acc_z)*RAD_TO_DEG;	//*(180/M_PI) to convert from radian to degree
-
-	  //debug prints
-	  if(isnan(acc_angle)){
-		  sprintf((char*) myString, "acc_angle is NaN\r\n");
-		  myComfyPrint(myString);
-	  }
-	  else{
-		  sprintf((char*) myString, "acc_angle*100 = %d\r\n", (int) (acc_angle*100));	//apparently floating numbers are disabled in print funcitons by defautl if using newlib
-		  myComfyPrint(myString);
-	  }
-	  //debug prints
-
-
-	  //debug prints
-	  static int16_t counter2 = 0;
-	  static int16_t myArr2[100] = { 0 };
-	  myArr2[counter2] = acc_angle;
-	  counter2 = (counter2+1) % 100;
-	  int32_t sum2 = 0;
-	  for(int i = 0; i<100; i++){
-		  sum2 += myArr2[i];
-	  }
-	  sprintf((char*) myString, "average acc_angle*100000 = %d\r\n", (sum2*100000)/100);
-	  myComfyPrint(myString);
-	  //debug prints
-
-
-	  ////////////////////////////////
-	  //calculate angle from gyroscope
-	  float gyro_rate = mpu_values.gyro_y * (1000.0/INT16_MAX);	//500, because that is the range that the mpu6050 is set to currently
-	  static float gyro_angle;
-	  static uint32_t current_time=0;
-	  static uint32_t last_time;
-	  if(done_already == 1){	//this awkward if-else is just temporary, so the last_time  and current_time are not too far apart from eachother, as this would lead to very high motor values there
-		  last_time = HAL_GetTick();
-		  done_already = 2;
-	  }
-	  else{
-		  last_time = current_time;
-	  }
-	  current_time = HAL_GetTick();
-
-	  gyro_angle = gyro_angle + gyro_rate*((float)(current_time-last_time)/1000);
-	  sprintf((char*) myString, "gyro_angle*100 = %d\r\n", (int) (gyro_angle*100));	//apparently floating numbers are disabled in print funcitons by defautl if using newlib
-	  myComfyPrint(myString);
-
-	  //////////////////////////////
-	  //combine both values into one
-	  static float current_angle=0;
-	  static float last_angle=0;
-	  float alpha = 0.9934;
-	  last_angle = current_angle;
-	  current_angle = alpha * (gyro_angle) + (float) (1-alpha) * acc_angle;
-
-	  if(done_already == 2){	//awkward if, so last_angle is not extremely different from current_angle on the first iteration as this would possibly lead to very high motor values there
-		last_angle = current_angle;
-		done_already = 3;
-	  }
-
-	  //debug print
-	  sprintf((char*) myString, "combined_angle*100 = %d\r\n", (int) current_angle);
-	  myComfyPrint(myString);
-	  //debug print
-
-	  /////
-	  //PID
-	  float target_angle = 0;
-	  float deviation = current_angle - target_angle;
-	  static float deviation_sum;
-	  deviation_sum = deviation_sum + deviation;
-	  //add constraining of max value of deviation_sum here
-
-	  float Kp=12, Ki=0, Kd=0;
-	  float motor_value_in_percent = Kp*deviation + Ki*deviation_sum*((float)(current_time-last_time)/1000) - Kd*(current_angle-last_angle)/((float)(current_time-last_time)/1000);
-	  int32_t motor_value = (motor_value_in_percent * MOTOR_MAX_SPEED) /100;
-
-	  //////////////////////////////
-	  //calculate motor values END//
-	  //////////////////////////////
-
-
-
-
-
-	  ///////////////////////
-	  //control motor BEGIN//
-	  ///////////////////////
-
-	  if(motor_value >= 0){
-		  motor_control(MOTOR_DIR_FORWARDS, (uint16_t) abs(motor_value));
-	  }
-	  else if(motor_value < 0){
-		  motor_control(MOTOR_DIR_BACKWARDS, (uint16_t) abs(motor_value));
-	  }
-
-	  sprintf((char*) myString, "calculated motorValue = %d\r\n", motor_value);
-	  myComfyPrint(myString);
-
-	  /////////////////////
-	  //control motor END//
-	  /////////////////////
 
 
     /* USER CODE END WHILE */
@@ -619,10 +458,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(MPU6050_INT_GPIO_Port, &GPIO_InitStruct);
 
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
-
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
@@ -649,30 +484,28 @@ void task_read_mpu6050(void *argument)
 	for(;;)
 	{
 
+		//make sure there is room in queue
+		while(osMessageQueueGetSpace(mpu6050_values_queueHandle) == 0){
+			//busy waiting
+		}
+
 		//read accelerometer data
 		HAL_I2C_Mem_Read(&hi2c1, (DEVICE_ADDRESS<<1) +1, REG_ACC_DATA, 1, read_mpu_buff, sizeof(read_mpu_buff), 100);
-		mpu_values_temp.acc_x = (uint16_t) (read_mpu_buff[0]<<8) + read_mpu_buff[1];
-		mpu_values_temp.acc_y = (uint16_t) (read_mpu_buff[2]<<8) + read_mpu_buff[3];
-		mpu_values_temp.acc_z = (uint16_t) (read_mpu_buff[4]<<8) + read_mpu_buff[5];
+		mpu_values_temp.acc_x = (int16_t) (read_mpu_buff[0]<<8) + read_mpu_buff[1];
+		mpu_values_temp.acc_y = (int16_t) (read_mpu_buff[2]<<8) + read_mpu_buff[3];
+		mpu_values_temp.acc_z = (int16_t) (read_mpu_buff[4]<<8) + read_mpu_buff[5];
 
 		//read gyroscope data
 		HAL_I2C_Mem_Read(&hi2c1, (DEVICE_ADDRESS<<1) +1, REG_GYRO_DATA, 1, read_mpu_buff, sizeof(read_mpu_buff), 100);
-		mpu_values_temp.gyro_x = (uint16_t) (read_mpu_buff[0]<<8) + read_mpu_buff[1];
-		mpu_values_temp.gyro_y = (uint16_t) (read_mpu_buff[2]<<8) + read_mpu_buff[3];
-		mpu_values_temp.gyro_z = (uint16_t) (read_mpu_buff[4]<<8) + read_mpu_buff[5];
+		mpu_values_temp.gyro_x = (int16_t) (read_mpu_buff[0]<<8) + read_mpu_buff[1];
+		mpu_values_temp.gyro_y = (int16_t) (read_mpu_buff[2]<<8) + read_mpu_buff[3];
+		mpu_values_temp.gyro_z = (int16_t) (read_mpu_buff[4]<<8) + read_mpu_buff[5];
 
 		//apply offsets
 		mpu_values_temp.gyro_y += GYRO_Y_OFFSET_1000;
 
-		//copy values to global variable
-		osMutexAcquire(mpu_values_mutexHandle, osWaitForever);
-		mpu_values.acc_x = mpu_values_temp.acc_x;
-		mpu_values.acc_y = mpu_values_temp.acc_y;
-		mpu_values.acc_z = mpu_values_temp.acc_z;
-		mpu_values.gyro_x = mpu_values_temp.gyro_x;
-		mpu_values.gyro_y = mpu_values_temp.gyro_y;
-		mpu_values.gyro_z = mpu_values_temp.gyro_z;
-		osMutexRelease(mpu_values_mutexHandle);
+		//send values to queue
+		osMessageQueuePut(mpu6050_values_queueHandle, &mpu_values_temp, 0, osWaitForever);
 
 	  }
 
@@ -692,7 +525,7 @@ void task_calculate_motor_values(void *argument)
 
 	  float acc_angle;
 	  float gyro_rate, gyro_angle;
-	  uint32_t current_time=(osKernelGetTickCount() / (1000.0/osKernelGetTickFreq())), last_time = current_time;
+	  uint32_t current_time=(osKernelGetTickCount()*1000 / osKernelGetTickFreq()), last_time = current_time;
 	  float current_angle=0, last_angle=0;
 	  float alpha = 0.9934;
 	  float target_angle=0;
@@ -700,6 +533,8 @@ void task_calculate_motor_values(void *argument)
 	  float Kp=12, Ki=0, Kd=0;
 	  float motor_value_in_percent;
 	  int32_t motor_value;
+	  mpu6050_values_t mpu6050_temp_values;
+	  mpu6050_values_t mpu_values;
 
 
 
@@ -707,24 +542,45 @@ void task_calculate_motor_values(void *argument)
   for(;;)
   {
 
+	  //wait for there to be values in the queue
+	  while(osMessageQueueGetCount(mpu6050_values_queueHandle) == 0){
+		  //busy waiting
+	  }
+
+	  //read values from queue
+	  osMessageQueueGet(mpu6050_values_queueHandle, &mpu_values, NULL, osWaitForever);
+
+
 	  //calculate angle from acceleration values
 	  acc_angle = atan2(mpu_values.acc_x, mpu_values.acc_z)*RAD_TO_DEG;	//*(180/M_PI) to convert from radian to degree
 
 	  //calculate angle from gyroscope
 	  gyro_rate = mpu_values.gyro_y * (1000.0/INT16_MAX);	//500, because that is the range that the mpu6050 is set to currently
-	  current_time = (osKernelGetTickCount() / (1000.0/osKernelGetTickFreq()));
+	  last_time = current_time;
+	  current_time = ((osKernelGetTickCount()*1000) / osKernelGetTickFreq());
 	  gyro_angle = gyro_angle + gyro_rate*((float)(current_time-last_time)/1000.0);
 
 	  //combine both values into one
 	  last_angle = current_angle;
 	  current_angle = alpha * (gyro_angle) + (float) (1-alpha) * acc_angle;
 
+
 	  //PID
+	  deviation = current_angle - target_angle;
 	  deviation_sum = deviation_sum + deviation;
 	  //add constraining of max value of deviation_sum here
 
 	  motor_value_in_percent = Kp*deviation + Ki*deviation_sum*((float)(current_time-last_time)/1000) - Kd*(current_angle-last_angle)/((float)(current_time-last_time)/1000);
 	  motor_value = (motor_value_in_percent * MOTOR_MAX_SPEED) /100;
+
+
+	  //if there is already a message in the queue, remove it
+	  if(osMessageQueueGetSpace(motor_value_queueHandle) < 1){
+		  int16_t temp;
+		  osMessageQueueGet(motor_value_queueHandle, &temp, NULL, osWaitForever);
+	  }
+	  //send motor value to queue
+	  osMessageQueuePut(motor_value_queueHandle, &motor_value, 0, osWaitForever);
 
   }
   /* USER CODE END task_calculate_motor_values */
@@ -741,16 +597,19 @@ void task_control_motors(void *argument)
 {
   /* USER CODE BEGIN task_control_motors */
 
-	int32_t motor_value_copy;
+	int32_t motor_value;
 
   /* Infinite loop */
   for(;;)
   {
 
-	  //copy motor value
-	  osMutexAcquire(motor_value_mutexHandle, osWaitForever);
-	  motor_value_copy = motor_value;
-	  osMutexRelease(motor_value_mutexHandle);
+	  //wait for a value
+	  while(osMessageQueueGetCount(motor_value_queueHandle) == 0){
+		  //busy waiting
+	  }
+
+	  //get motor value
+	  osMessageQueueGet(motor_value_queueHandle, &motor_value, NULL, osWaitForever);
 
 	  if(motor_value >= 0){
 		  motor_control(MOTOR_DIR_FORWARDS, (uint16_t) abs(motor_value));

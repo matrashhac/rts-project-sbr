@@ -12,7 +12,7 @@
 extern I2C_HandleTypeDef hi2c1;
 extern UART_HandleTypeDef huart2;
 
-void mpu6050_init(){
+int mpu6050_init(){
 
 	uint8_t buff[256] = { 0 };
 
@@ -24,6 +24,7 @@ void mpu6050_init(){
 	  else{
 		  strcpy((char*) buff, "The device is not ready. Check the cables\r\n");
 		  HAL_UART_Transmit(&huart2, buff, strlen((char*) buff), HAL_MAX_DELAY);
+		  return -1;
 	  }
 
 	  //configure gyroscope
@@ -66,6 +67,8 @@ void mpu6050_init(){
 		  strcpy((char*) buff, "error disabling sleep\r\n");
 		  HAL_UART_Transmit(&huart2, buff, strlen((char*) buff), HAL_MAX_DELAY);
 	  }
+
+	  return 0;
 
 }
 

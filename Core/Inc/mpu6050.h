@@ -51,7 +51,7 @@ typedef struct{
 	int16_t acc_x, acc_y, acc_z;
 }mpu6050_values_t;
 
-void mpu6050_init();
+int mpu6050_init();
 void mpu6050_read(mpu6050_values_t* values);
 
 #endif /* INC_MPU6050_H_ */
